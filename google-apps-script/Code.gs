@@ -22,17 +22,36 @@ function doGet() {
   return json_({ ok: true, message: "Lifeofthreads Sheets API is running. Send POST requests through the Netlify app." });
 }
 
+
 function route_(b) {
   const action = b.action;
+  const r = b.record || {};
+
   if (action === "bootstrap") return bootstrap_();
-  if (action === "addProduct") return addProduct_(b.record || {});
-  if (action === "addSale") return addSale_(b.record || {});
-  if (action === "addStock") return addStock_(b.record || {});
-  if (action === "addExpense") return addExpense_(b.record || {});
-  if (action === "addMisc") return addMisc_(b.record || {});
-  if (action === "updateSale") return updateSale_(b.record || {});
-  throw new Error("Unknown action");
+
+  if (action === "addProduct") return addProduct_(r);
+  if (action === "updateProduct") return updateProduct_(r);
+  if (action === "deleteProduct") return deleteProduct_(r);
+
+  if (action === "addSale") return addSale_(r);
+  if (action === "updateSale") return updateSale_(r);
+  if (action === "deleteSale") return deleteSale_(r);
+
+  if (action === "addStock") return addStock_(r);
+  if (action === "updateStock") return updateStock_(r);
+  if (action === "deleteStock") return deleteStock_(r);
+
+  if (action === "addExpense") return addExpense_(r);
+  if (action === "updateExpense") return updateExpense_(r);
+  if (action === "deleteExpense") return deleteExpense_(r);
+
+  if (action === "addMisc") return addMisc_(r);
+  if (action === "updateMisc") return updateMisc_(r);
+  if (action === "deleteMisc") return deleteMisc_(r);
+
+  throw new Error("Unknown action: " + action);
 }
+
 
 function ss_() {
   const id = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
@@ -75,7 +94,7 @@ function withLock_(fn) {
 }
 function bootstrap_() {
   const ss = ss_();
-  const products = readTable_(sheet_("Products"), 19);
+  const products = readTable_(sheet_("Products"), 20);
   const sales = readTable_(sheet_("Sales"), 16);
   const stock = readTable_(sheet_("Stock In"), 7);
   const expenses = readTable_(sheet_("Expenses"), 6);
@@ -116,10 +135,23 @@ function addProduct_(r) {
     if (existing.includes(sku)) throw new Error("That SKU already exists.");
     const row = nextRow_(s, 1);
     s.getRange(row, 1, 1, 9).setValues([[
-      sku, required_(r.name, "Product name"), r.category || "", r.colour || "", r.size || "",
-      r.supplier || "", number_(r.unitCost, "Unit cost", true), number_(r.sellingPrice, "Selling price", true),
+      sku,
+      required_(r.name, "Product name"),
+      r.category || "",
+      r.colour || "",
+      r.size || "",
+      r.supplier || "",
+      number_(r.unitCost, "Unit cost", true),
+      number_(r.sellingPrice, "Selling price", true),
       number_(r.openingStock || 0, "Opening stock", true)
     ]]);
+
+    s.getRange(row, 16).setValue(
+      number_(r.reorderLevel || 0, "Reorder level", true)
+    );
+
+    // Product image URL stored in column T
+    s.getRange(row, 20).setValue(r.imageUrl || "");
     s.getRange(row, 16).setValue(number_(r.reorderLevel || 0, "Reorder level", true));
     copyProductFormulas_(s, row);
     SpreadsheetApp.flush();
@@ -201,20 +233,266 @@ function addMisc_(r) {
   SpreadsheetApp.flush();
   return { message: "Miscellaneous cost recorded" };
 }
-function updateSale_(r) {
-  const s = sheet_("Sales");
-  const orderId = String(required_(r.orderId, "Order ID")).trim();
-  const last = Math.max(s.getLastRow(), CONFIG.HEADER_ROW);
-  const ids = s.getRange(CONFIG.FIRST_DATA_ROW, 1, Math.max(1, last - CONFIG.HEADER_ROW), 1).getDisplayValues().flat();
-  const index = ids.findIndex(x => x === orderId);
-  if (index < 0) throw new Error("Order ID not found.");
-  const matchingRows = [];
-  ids.forEach((value, i) => { if (value === orderId) matchingRows.push(CONFIG.FIRST_DATA_ROW + i); });
-  matchingRows.forEach(row => {
-    if (r.status) s.getRange(row, 10).setValue(r.status);
-    if (r.paymentStatus) s.getRange(row, 15).setValue(r.paymentStatus);
-    if (r.notes !== undefined) s.getRange(row, 16).setValue(r.notes);
-  });
-  SpreadsheetApp.flush();
-  return { message: "Sale updated", rowsUpdated: matchingRows.length };
+
+
+/* ========== CRUD HELPERS ========== */
+
+function findRowByValue_(sheet, column, value) {
+  const last = sheet.getLastRow();
+  if (last < CONFIG.FIRST_DATA_ROW) return -1;
+
+  const values = sheet.getRange(
+    CONFIG.FIRST_DATA_ROW,
+    column,
+    last - CONFIG.FIRST_DATA_ROW + 1,
+    1
+  ).getDisplayValues().flat();
+
+  const index = values.findIndex(v => String(v).trim() === String(value).trim());
+  return index === -1 ? -1 : CONFIG.FIRST_DATA_ROW + index;
 }
+
+function findRecordRow_(sheet, record, columns) {
+  const last = sheet.getLastRow();
+  if (last < CONFIG.FIRST_DATA_ROW) return -1;
+
+  const count = last - CONFIG.FIRST_DATA_ROW + 1;
+  const rows = sheet.getRange(
+    CONFIG.FIRST_DATA_ROW, 1, count, sheet.getLastColumn()
+  ).getDisplayValues();
+
+  const index = rows.findIndex(row =>
+    columns.every(c =>
+      String(row[c.col - 1]).trim() === String(record[c.key] ?? "").trim()
+    )
+  );
+
+  return index === -1 ? -1 : CONFIG.FIRST_DATA_ROW + index;
+}
+
+function deleteRowChecked_(sheet, row) {
+  if (row < CONFIG.FIRST_DATA_ROW) throw new Error("Record not found.");
+  sheet.deleteRow(row);
+  SpreadsheetApp.flush();
+  return { message: "Record deleted." };
+}
+
+/* ========== PRODUCTS ========== */
+
+function updateProduct_(r) {
+  return withLock_(() => {
+    const s = sheet_("Products");
+    const sku = String(required_(r.sku, "SKU")).trim();
+    const row = findRowByValue_(s, 1, sku);
+    if (row < 0) throw new Error("Product not found.");
+
+    s.getRange(row, 2, 1, 8).setValues([[
+      required_(r.name, "Product name"),
+      r.category || "",
+      r.colour || "",
+      r.size || "",
+      r.supplier || "",
+      number_(r.unitCost, "Unit cost", true),
+      number_(r.sellingPrice, "Selling price", true),
+      number_(r.openingStock || 0, "Opening stock", true)
+    ]]);
+
+    s.getRange(row, 16).setValue(number_(r.reorderLevel || 0, "Reorder level", true));
+    if (r.imageUrl !== undefined && r.imageUrl !== null) {
+      s.getRange(row, 20).setValue(r.imageUrl);
+    }
+
+    SpreadsheetApp.flush();
+    return { message: "Product updated.", sku };
+  });
+}
+
+function deleteProduct_(r) {
+  return withLock_(() => {
+    const sku = String(required_(r.sku, "SKU")).trim();
+
+    // Prevent deletion if the SKU has transaction history.
+    const sales = sheet_("Sales");
+    const stock = sheet_("Stock In");
+
+    if (findRowByValue_(sales, 5, sku) >= 0) {
+      throw new Error("This product has sales history. It cannot be deleted.");
+    }
+
+    if (findRowByValue_(stock, 3, sku) >= 0) {
+      throw new Error("This product has stock purchase history. It cannot be deleted.");
+    }
+
+    const s = sheet_("Products");
+    const row = findRowByValue_(s, 1, sku);
+    return deleteRowChecked_(s, row);
+  });
+}
+
+/* ========== SALES ========== */
+
+function updateSale_(r) {
+  return withLock_(() => {
+    const s = sheet_("Sales");
+    const orderId = String(required_(r.orderId, "Order ID")).trim();
+    const sku = String(required_(r.sku, "SKU")).trim();
+
+    const row = findRecordRow_(s, { orderId, sku }, [
+      { col: 1, key: "orderId" },
+      { col: 5, key: "sku" }
+    ]);
+
+    if (row < 0) throw new Error("Sale record not found.");
+
+    s.getRange(row, 1, 1, 5).setValues([[
+      orderId,
+      dateValue_(r.orderDate),
+      r.channel || "",
+      r.customer || "",
+      sku
+    ]]);
+
+    s.getRange(row, 7, 1, 4).setValues([[
+      number_(r.quantity, "Quantity", false),
+      number_(r.sellingPrice, "Selling price", true),
+      number_(r.discount || 0, "Discount", true),
+      r.status || "Confirmed"
+    ]]);
+
+    s.getRange(row, 15, 1, 2).setValues([[
+      r.paymentStatus || "Pending",
+      r.notes || ""
+    ]]);
+
+    SpreadsheetApp.flush();
+    return { message: "Sale updated." };
+  });
+}
+
+function deleteSale_(r) {
+  return withLock_(() => {
+    const s = sheet_("Sales");
+    const row = findRecordRow_(s, r, [
+      { col: 1, key: "orderId" },
+      { col: 5, key: "sku" }
+    ]);
+    return deleteRowChecked_(s, row);
+  });
+}
+
+/* ========== STOCK PURCHASES ========== */
+
+function updateStock_(r) {
+  return withLock_(() => {
+    const s = sheet_("Stock In");
+    const ref = String(required_(r.reference, "Stock reference")).trim();
+    const row = findRowByValue_(s, 2, ref);
+    if (row < 0) throw new Error("Stock purchase not found.");
+
+    s.getRange(row, 1, 1, 7).setValues([[
+      dateValue_(r.date),
+      ref,
+      required_(r.sku, "SKU"),
+      number_(r.quantity, "Quantity", false),
+      number_(r.unitCost, "Unit cost", true),
+      r.supplier || "",
+      r.notes || ""
+    ]]);
+
+    SpreadsheetApp.flush();
+    return { message: "Stock purchase updated." };
+  });
+}
+
+function deleteStock_(r) {
+  return withLock_(() => {
+    const s = sheet_("Stock In");
+    const row = findRowByValue_(s, 2, required_(r.reference, "Stock reference"));
+    return deleteRowChecked_(s, row);
+  });
+}
+
+/* ========== EXPENSES ========== */
+
+function updateExpense_(r) {
+  return withLock_(() => {
+    const s = sheet_("Expenses");
+    const row = findRecordRow_(s, r, [
+      { col: 1, key: "originalDate" },
+      { col: 2, key: "originalType" },
+      { col: 3, key: "originalDescription" },
+      { col: 5, key: "originalAmount" }
+    ]);
+
+    if (row < 0) throw new Error("Expense record not found.");
+
+    s.getRange(row, 1, 1, 6).setValues([[
+      dateValue_(r.date),
+      required_(r.type, "Expense type"),
+      required_(r.description, "Description"),
+      r.relatedOrder || "",
+      number_(r.amount, "Amount", false),
+      r.notes || ""
+    ]]);
+
+    SpreadsheetApp.flush();
+    return { message: "Expense updated." };
+  });
+}
+
+function deleteExpense_(r) {
+  return withLock_(() => {
+    const s = sheet_("Expenses");
+    const row = findRecordRow_(s, r, [
+      { col: 1, key: "originalDate" },
+      { col: 2, key: "originalType" },
+      { col: 3, key: "originalDescription" },
+      { col: 5, key: "originalAmount" }
+    ]);
+    return deleteRowChecked_(s, row);
+  });
+}
+
+/* ========== MISCELLANEOUS COSTS ========== */
+
+function updateMisc_(r) {
+  return withLock_(() => {
+    const s = sheet_("Miscellaneous");
+    const row = findRecordRow_(s, r, [
+      { col: 1, key: "originalDate" },
+      { col: 2, key: "originalCategory" },
+      { col: 3, key: "originalDescription" }
+    ]);
+
+    if (row < 0) throw new Error("Miscellaneous record not found.");
+
+    const qty = r.quantity === "" || r.quantity == null
+      ? "" : number_(r.quantity, "Quantity", false);
+    const unit = r.unitCost === "" || r.unitCost == null
+      ? "" : number_(r.unitCost, "Unit cost", true);
+
+    s.getRange(row, 1, 1, 5).setValues([[
+      dateValue_(r.date),
+      required_(r.category, "Category"),
+      required_(r.description, "Description"),
+      qty,
+      unit
+    ]]);
+
+    SpreadsheetApp.flush();
+    return { message: "Miscellaneous cost updated." };
+  });
+}
+
+function deleteMisc_(r) {
+  return withLock_(() => {
+    const s = sheet_("Miscellaneous");
+    const row = findRecordRow_(s, r, [
+      { col: 1, key: "originalDate" },
+      { col: 2, key: "originalCategory" },
+      { col: 3, key: "originalDescription" }
+    ]);
+    return deleteRowChecked_(s, row);
+  });
+}
+

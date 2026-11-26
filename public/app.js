@@ -37,7 +37,11 @@ function render(){
   const low=data.products.filter(p=>String(p["Stock Status"]||"").toUpperCase()==="RESTOCK");
   $("#lowStock").innerHTML=low.length?low.slice(0,7).map(p=>`<div class="low-row"><span><b>${esc(val(p,"SKU (unique)"))}</b> · ${esc(val(p,"Product Name"))} <span class="pill warn">${esc(val(p,"Stock Status"))}</span></span><span>${esc(val(p,"Available Stock"))} left</span></div>`).join(""):'<div class="empty">All good — no products currently need restocking.</div>';
   $("#recentSales").innerHTML=table(data.sales.slice(-6).reverse(),["Order ID","Order Date","Customer / Handle","SKU","Quantity","Net Sales (₹)","Order Status"]);
-  $("#productsTable").innerHTML=table(data.products,["SKU (unique)","Product Name","Category","Colour","Size","Unit Cost (₹)","Selling Price (₹)","Available Stock","Stock Status","Total Purchase Investment (₹)"]);
+  $("#productsTable").innerHTML=table(
+  data.products,
+  ["SKU (unique)","Product Name","Category","Colour","Size","Unit Cost (₹)","Selling Price (₹)","Available Stock","Stock Status","Total Purchase Investment (₹)"],
+  "products"
+);
   $("#salesTable").innerHTML=table(data.sales.slice().reverse(),["Order ID","Order Date","Sales Channel","Customer / Handle","SKU","Quantity","Net Sales (₹)","Order Status","Payment Status"],true);
   $("#stockTable").innerHTML=table(data.stock.slice().reverse(),["Date","Stock-In Reference","SKU","Quantity Added","Unit Cost (₹)","Supplier"]);
   $("#expensesTable").innerHTML=table(data.expenses.slice().reverse(),["Date","Expense Type","Description","Related Order (optional)","Amount (₹)","Notes"]);
@@ -46,9 +50,47 @@ function render(){
   $("#saleSku").innerHTML='<option value="">Choose a product</option>'+options;
   $$(".skuSelect").forEach(el=>el.innerHTML='<option value="">Choose a product</option>'+options);
 }
-function table(rows, headers, salesActions=false){
-  if(!rows?.length)return '<div class="empty">No records yet. Add your first entry to get started.</div>';
-  return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${esc(h.replace(" (₹)",""))}</th>`).join("")}${salesActions?'<th>Update</th>':""}</tr></thead><tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td>${h.includes("SKU")?`<span class="sku">${esc(val(r,h))}</span>`:h.includes("Status")?`<span class="pill ${/delivered|paid|in stock/i.test(val(r,h))?"good":/restock|pending/i.test(val(r,h))?"warn":""}">${esc(val(r,h))}</span>`:esc(val(r,h))}</td>`).join("")}${salesActions?`<td><button class="text-btn update-sale" data-order="${attr(val(r,"Order ID"))}">Edit status</button></td>`:""}</tr>`).join("")}</tbody></table></div>`;
+function table(rows, headers, module = "") {
+  if (!rows?.length) {
+    return '<div class="empty">No records yet. Add your first entry to get started.</div>';
+  }
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            ${headers.map(h => `<th>${esc(h.replace(" (₹)", ""))}</th>`).join("")}
+            ${module ? "<th>Actions</th>" : ""}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => {
+            const sku = val(r, "SKU (unique)");
+            return `
+              <tr>
+                ${headers.map(h => `
+                  <td>
+                    ${h.includes("SKU")
+                      ? `<span class="sku">${esc(val(r,h))}</span>`
+                      : h.includes("Status")
+                        ? `<span class="pill">${esc(val(r,h))}</span>`
+                        : esc(val(r,h))}
+                  </td>
+                `).join("")}
+                ${module === "products" ? `
+                  <td class="actions">
+                    <button class="text-btn edit-product" data-sku="${attr(sku)}">Edit</button>
+                    <button class="text-btn delete-product" data-sku="${attr(sku)}">Delete</button>
+                  </td>
+                ` : ""}
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 function esc(x){return String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function attr(x){return esc(x).replace(/`/g,"&#96;");}
@@ -59,6 +101,21 @@ function go(page){
   $("#pageEyebrow").textContent=names[page][0];$("#pageTitle").textContent=names[page][1];
 }
 function formObject(form){return Object.fromEntries(new FormData(form).entries());}
+function resetProductForm() {
+  const form = $("#productForm");
+
+  form.reset();
+  form.elements.sku.readOnly = false;
+
+  delete form.dataset.editing;
+  delete form.dataset.originalSku;
+
+  $("#productModal").querySelector("h2").textContent =
+    "Add product / variant";
+
+  form.querySelector("button.primary").textContent =
+    "Save product";
+}
 async function submitForm(form, action){
   const button=form.querySelector("button.primary");button.disabled=true;button.textContent="Saving…";
   try{await api(action,formObject(form));form.reset();form.querySelectorAll('input[type="date"]').forEach(i=>i.value=today);form.closest("dialog").close();await load();notify("Saved successfully. Your Google Sheet has been updated.");}
@@ -70,12 +127,61 @@ $("#logoutBtn").onclick=()=>{token="";sessionStorage.removeItem("lot_token");sho
 $("#refreshBtn").onclick=load;
 $("#nav").addEventListener("click",e=>{const b=e.target.closest("[data-page]");if(b)go(b.dataset.page);});
 document.addEventListener("click",e=>{
-  const m=e.target.closest("[data-modal]");if(m){const d=$("#"+m.dataset.modal);d.querySelectorAll('input[type="date"]').forEach(i=>i.value=today);d.showModal();}
+  const m = e.target.closest("[data-modal]");
+
+if (m) {
+  const d = $("#" + m.dataset.modal);
+
+  if (m.dataset.modal === "productModal") {
+    resetProductForm();
+  }
+
+  d.querySelectorAll('input[type="date"]').forEach(i => {
+    i.value = today;
+  });
+
+  d.showModal();
+}
   if(e.target.matches("[data-close]"))e.target.closest("dialog").close();
   const g=e.target.closest("[data-goto]");if(g)go(g.dataset.goto);
   const u=e.target.closest(".update-sale");if(u)updateSale(u.dataset.order);
 });
-$("#productForm").onsubmit=e=>{e.preventDefault();submitForm(e.target,"addProduct");};
+$("#productForm").onsubmit = async e => {
+  e.preventDefault();
+
+  const form = e.target;
+  const editing = form.dataset.editing === "true";
+  const button = form.querySelector("button.primary");
+
+  const payload = formObject(form);
+
+  if (editing) {
+    payload.sku = form.dataset.originalSku;
+  }
+
+  button.disabled = true;
+  button.textContent = editing ? "Updating…" : "Saving…";
+
+  try {
+    await api(editing ? "updateProduct" : "addProduct", payload);
+
+    $("#productModal").close();
+    resetProductForm();
+
+    await load();
+
+    notify(editing
+      ? "Product updated successfully."
+      : "Product added successfully."
+    );
+
+  } catch (error) {
+    notify(error.message, true);
+
+  } finally {
+    button.disabled = false;
+  }
+};
 $("#saleForm").onsubmit=e=>{e.preventDefault();submitForm(e.target,"addSale");};
 $("#stockForm").onsubmit=e=>{e.preventDefault();submitForm(e.target,"addStock");};
 $("#expenseForm").onsubmit=e=>{e.preventDefault();submitForm(e.target,"addExpense");};
@@ -91,4 +197,61 @@ async function updateSale(orderId){
   const payment=prompt("Payment status (Pending, Paid, Partially Paid, Refunded):",val(current,"Payment Status"));if(payment===null)return;
   try{await api("updateSale",{orderId,status,paymentStatus:payment});await load();notify("Order updated.");}catch(e){notify(e.message,true);}
 }
+async function editProduct(sku) {
+  const product = data.products.find(
+    p => val(p, "SKU (unique)") === sku
+  );
+
+  if (!product) return;
+
+  const form = $("#productForm");
+
+  const fields = {
+    sku: "SKU (unique)",
+    name: "Product Name",
+    category: "Category",
+    colour: "Colour",
+    size: "Size",
+    supplier: "Supplier",
+    unitCost: "Unit Cost (₹)",
+    sellingPrice: "Selling Price (₹)",
+    openingStock: "Opening Stock",
+    reorderLevel: "Reorder Level"
+  };
+
+  Object.entries(fields).forEach(([name, key]) => {
+    const input = form.elements[name];
+    if (input) input.value = val(product, key);
+  });
+
+  form.elements.sku.readOnly = true;
+
+  form.dataset.editing = "true";
+  form.dataset.originalSku = sku;
+
+  form.querySelector("button.primary").textContent = "Update product";
+  $("#productModal").querySelector("h2").textContent = "Edit product";
+
+  $("#productModal").showModal();
+}
+
+async function deleteProduct(sku) {
+  if (!confirm(`Are you sure you want to delete product ${sku}?`)) return;
+
+  try {
+    await api("deleteProduct", { sku });
+    await load();
+    notify("Product deleted successfully.");
+  } catch (error) {
+    notify(error.message, true);
+  }
+}
+
+document.addEventListener("click", e => {
+  const edit = e.target.closest(".edit-product");
+  if (edit) editProduct(edit.dataset.sku);
+
+  const del = e.target.closest(".delete-product");
+  if (del) deleteProduct(del.dataset.sku);
+});
 if(token){showApp();load();}else showLogin();
