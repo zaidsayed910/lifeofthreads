@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#321b2c">
+  <title>Lifeofthreads | Inventory Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="loginView" class="login-shell">
+    <div class="login-card">
+      <div class="brand-mark">L<span>O</span>T</div>
+      <p class="eyebrow">PRIVATE INVENTORY STUDIO</p>
+      <h1>Lifeofthreads</h1><p class="muted">Your store, beautifully organised.</p>
+      <form id="loginForm"><label>Access password</label><input id="password" type="password" required autocomplete="current-password" placeholder="Enter your private password"><button class="primary full">Sign in</button></form>
+      <p id="loginError" class="error"></p>
+      <small>Private workspace · Google Sheets synced</small>
+    </div>
+  </div>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark small">L<span>O</span>T</div><div><b>Lifeofthreads</b><small>INVENTORY STUDIO</small></div></div>
+      <nav id="nav">
+        <button class="nav-item active" data-page="overview">◫ <span>Overview</span></button>
+        <button class="nav-item" data-page="products">◇ <span>Products</span></button>
+        <button class="nav-item" data-page="sales">↗ <span>Sales</span></button>
+        <button class="nav-item" data-page="stock">＋ <span>Stock purchases</span></button>
+        <button class="nav-item" data-page="expenses">₹ <span>Expenses</span></button>
+        <button class="nav-item" data-page="misc">✳ <span>Miscellaneous</span></button>
+      </nav>
+      <div class="sidebar-bottom"><div class="sync-dot"></div><span>Connected to Google Sheets</span><button id="logoutBtn">Sign out</button></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><p class="eyebrow" id="pageEyebrow">YOUR BUSINESS AT A GLANCE</p><h1 id="pageTitle">Overview</h1></div><div class="top-actions"><span id="lastSync">Not synced</span><button id="refreshBtn" class="outline">↻ Refresh</button></div></header>
+      <div id="notice" class="notice hidden"></div>
+      <section id="overviewPage" class="page">
+        <div class="welcome"><div><p class="eyebrow">LIFEOFTHREADS · STORE SNAPSHOT</p><h2>Good business starts with<br><em>knowing your numbers.</em></h2><p>Keep every product, order and rupee in one place.</p></div><div class="welcome-art">LOT<span>✳</span></div></div>
+        <div class="stats" id="stats"></div>
+        <div class="panel"><div class="panel-head"><div><p class="eyebrow">INVENTORY HEALTH</p><h3>Products to keep an eye on</h3></div><button class="text-btn" data-goto="products">View products →</button></div><div id="lowStock"></div></div>
+        <div class="panel"><div class="panel-head"><div><p class="eyebrow">RECENT ACTIVITY</p><h3>Latest sales</h3></div><button class="text-btn" data-goto="sales">View all →</button></div><div id="recentSales"></div></div>
+      </section>
+      <section id="productsPage" class="page hidden"><div class="toolbar"><div><h2>Product catalogue</h2><p>One SKU for every size and colour combination.</p></div><button class="primary" data-modal="productModal">＋ Add product</button></div><div class="panel"><input class="search" id="productSearch" placeholder="Search SKU, product, colour or category"><div id="productsTable"></div></div></section>
+      <section id="salesPage" class="page hidden"><div class="toolbar"><div><h2>Sales & orders</h2><p>Record orders and keep their status up to date.</p></div><button class="primary" data-modal="saleModal">＋ Record sale</button></div><div class="panel"><div id="salesTable"></div></div></section>
+      <section id="stockPage" class="page hidden"><div class="toolbar"><div><h2>Stock purchases</h2><p>Log every restock with its actual unit purchase cost.</p></div><button class="primary" data-modal="stockModal">＋ Add stock</button></div><div class="panel"><div id="stockTable"></div></div></section>
+      <section id="expensesPage" class="page hidden"><div class="toolbar"><div><h2>Business expenses</h2><p>Courier, ads, platform fees and operating expenses.</p></div><button class="primary" data-modal="expenseModal">＋ Add expense</button></div><div class="panel"><div id="expensesTable"></div></div></section>
+      <section id="miscPage" class="page hidden"><div class="toolbar"><div><h2>Miscellaneous costs</h2><p>Packaging, shopping bags, labels, photoshoots and more.</p></div><button class="primary" data-modal="miscModal">＋ Add cost</button></div><div class="panel"><div id="miscTable"></div></div></section>
+      <footer>Lifeofthreads Inventory Studio <span>·</span> Your records are stored in your Google Sheet.</footer>
+    </main>
+  </div>
+
+  <dialog id="productModal"><form id="productForm" class="modal-form"><div class="modal-head"><div><p class="eyebrow">NEW CATALOGUE ITEM</p><h2>Add product / variant</h2></div><button type="button" class="close" data-close>×</button></div><div class="form-grid">
+    <label>SKU *<input name="sku" required placeholder="e.g. LOT0005"></label><label>Product name *<input name="name" required></label>
+    <label>Category<input name="category" placeholder="Kurta set, dress..."></label><label>Colour<input name="colour"></label><label>Size<input name="size" placeholder="S, M, L, Free size"></label><label>Supplier<input name="supplier"></label>
+    <label>Unit cost (₹) *<input name="unitCost" type="number" min="0" step=".01" required></label><label>Selling price (₹) *<input name="sellingPrice" type="number" min="0" step=".01" required></label><label>Opening stock<input name="openingStock" type="number" min="0" value="0"></label><label>Reorder level<input name="reorderLevel" type="number" min="0" value="2"></label>
+  </div><button class="primary full">Save product</button></form></dialog>
+
+  <dialog id="saleModal"><form id="saleForm" class="modal-form"><div class="modal-head"><div><p class="eyebrow">NEW ORDER</p><h2>Record a sale</h2></div><button type="button" class="close" data-close>×</button></div><div class="form-grid">
+    <label>Order ID *<input name="orderId" required placeholder="e.g. IG-1001"></label><label>Order date *<input name="orderDate" type="date" required></label><label>Sales channel<select name="channel"><option>Instagram</option><option>WhatsApp</option><option>Website</option><option>Other</option></select></label><label>Customer / handle<input name="customer"></label>
+    <label class="wide">Product / SKU *<select name="sku" id="saleSku" required></select></label><label>Quantity *<input name="quantity" type="number" min="1" required value="1"></label><label>Unit selling price (₹) *<input name="sellingPrice" type="number" min="0" step=".01" required></label><label>Discount (₹)<input name="discount" type="number" min="0" step=".01" value="0"></label><label>Order status<select name="status"><option>Confirmed</option><option>Shipped</option><option>Delivered</option><option>Cancelled</option><option>Returned</option></select></label><label>Payment status<select name="paymentStatus"><option>Pending</option><option>Paid</option><option>Partially Paid</option><option>Refunded</option></select></label><label class="wide">Notes<input name="notes"></label>
+  </div><button class="primary full">Save sale</button></form></dialog>
+
+  <dialog id="stockModal"><form id="stockForm" class="modal-form"><div class="modal-head"><div><p class="eyebrow">INVENTORY IN</p><h2>Record stock purchase</h2></div><button type="button" class="close" data-close>×</button></div><div class="form-grid">
+    <label>Date *<input name="date" type="date" required></label><label>Reference<input name="reference" placeholder="Optional"></label><label class="wide">Product / SKU *<select name="sku" class="skuSelect" required></select></label><label>Quantity added *<input name="quantity" type="number" min="1" required></label><label>Actual unit cost (₹) *<input name="unitCost" type="number" min="0" step=".01" required></label><label>Supplier<input name="supplier"></label><label class="wide">Notes<input name="notes"></label>
+  </div><button class="primary full">Save stock purchase</button></form></dialog>
+
+  <dialog id="expenseModal"><form id="expenseForm" class="modal-form"><div class="modal-head"><div><p class="eyebrow">OPERATING COST</p><h2>Add business expense</h2></div><button type="button" class="close" data-close>×</button></div><div class="form-grid">
+    <label>Date *<input name="date" type="date" required></label><label>Expense type *<input name="type" required placeholder="Courier, Ads, Fees..."></label><label class="wide">Description *<input name="description" required></label><label>Related order<input name="relatedOrder"></label><label>Amount (₹) *<input name="amount" type="number" min="0.01" step=".01" required></label><label class="wide">Notes<input name="notes"></label>
+  </div><button class="primary full">Save expense</button></form></dialog>
+
+  <dialog id="miscModal"><form id="miscForm" class="modal-form"><div class="modal-head"><div><p class="eyebrow">SMALL & OTHER COSTS</p><h2>Add miscellaneous cost</h2></div><button type="button" class="close" data-close>×</button></div><div class="form-grid">
+    <label>Date *<input name="date" type="date" required></label><label>Category *<select name="category"><option>Packaging</option><option>Shopping Bags</option><option>Labels & Tags</option><option>Photography</option><option>Instagram Ads</option><option>Marketing</option><option>Stationery</option><option>Travel</option><option>Other</option></select></label><label class="wide">Description / item *<input name="description" required></label><label>Quantity (optional)<input name="quantity" type="number" min="0.01" step=".01"></label><label>Unit cost / total cost (₹) *<input name="unitCost" type="number" min="0" step=".01" required></label>
+  </div><p class="hint">If you enter a quantity, total cost is calculated as quantity × unit cost. If you leave quantity blank, the amount is treated as the total cost.</p><button class="primary full">Save cost</button></form></dialog>
+  <script src="/app.js"></script>
+</body></html>
