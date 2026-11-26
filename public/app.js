@@ -315,7 +315,7 @@ function setupStockAdjustmentsUI() {
     button.id = "stockAdjustmentsNav";
     button.className = "nav-item";
     button.dataset.page = "stockAdjustments";
-    button.textContent = "Stock Adjustments";
+    button.innerHTML = '± <span>Stock adjustments</span>';
 
     nav.appendChild(button);
   }
@@ -333,24 +333,27 @@ function setupStockAdjustmentsUI() {
     page.className = "page hidden";
 
     page.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+      <div class="toolbar">
         <div>
-          <h2>Stock Adjustments</h2>
+          <h2>Stock adjustments</h2>
           <p>Correct your inventory when physical stock differs from recorded stock.</p>
         </div>
 
         <button type="button" class="primary" id="addStockAdjustmentBtn">
-          + Add adjustment
+          ＋ Add adjustment
         </button>
       </div>
 
-      <div class="stat" style="margin-bottom:20px;">
-        <label>Total adjustments recorded</label>
-        <strong id="adjustmentCount">0</strong>
-        <small>Positive values add stock. Negative values reduce stock.</small>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">INVENTORY CORRECTIONS</p>
+            <h3>Adjustment history</h3>
+          </div>
+          <span class="pill"><span id="adjustmentCount">0</span> recorded</span>
+        </div>
+        <div id="stockAdjustmentsTable"></div>
       </div>
-
-      <div id="stockAdjustmentsTable"></div>
     `;
 
     pageHost.appendChild(page);
@@ -363,60 +366,49 @@ function setupStockAdjustmentsUI() {
     dialog.id = "stockAdjustmentModal";
 
     dialog.innerHTML = `
-      <form id="stockAdjustmentForm" class="form-grid">
-
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-          <h2 id="adjustmentModalTitle">Add stock adjustment</h2>
-          <button type="button" class="text-btn" data-close>Close</button>
+      <form id="stockAdjustmentForm" class="modal-form">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">INVENTORY CORRECTION</p>
+            <h2 id="adjustmentModalTitle">Add stock adjustment</h2>
+          </div>
+          <button type="button" class="close" data-close aria-label="Close dialog">×</button>
         </div>
 
-        <input type="hidden" name="reference">
-
-        <label>
-          Adjustment date
-          <input type="date" name="date" required>
-        </label>
-
-        <label>
-          Product / SKU
-          <select name="sku" id="adjustmentSku" class="skuSelect" required>
-            <option value="">Choose a product</option>
-          </select>
-        </label>
-
-        <label>
-          Quantity change
-          <input
-            type="number"
-            name="quantityChange"
-            step="1"
-            required
-            placeholder="Example: 5 or -2"
-          >
-          <small>Use a positive number to add stock and a negative number to reduce stock.</small>
-        </label>
-
-        <label>
-          Reason
-          <select name="reason" required>
-            <option value="">Choose a reason</option>
-            <option value="Physical count correction">Physical count correction</option>
-            <option value="Damaged item">Damaged item</option>
-            <option value="Lost/missing item">Lost/missing item</option>
-            <option value="Found stock">Found stock</option>
-            <option value="Other">Other</option>
-          </select>
-        </label>
-
-        <label>
-          Notes
-          <textarea name="notes" rows="3" placeholder="Optional notes"></textarea>
-        </label>
-
-        <button type="submit" class="primary" id="saveAdjustmentBtn">
-          Save adjustment
-        </button>
-
+        <div class="form-grid">
+          <input type="hidden" name="reference">
+          <label>
+            Adjustment date *
+            <input type="date" name="date" required>
+          </label>
+          <label>
+            Product / SKU *
+            <select name="sku" id="adjustmentSku" class="skuSelect" required>
+              <option value="">Choose a product</option>
+            </select>
+          </label>
+          <label>
+            Quantity change *
+            <input type="number" name="quantityChange" step="1" required placeholder="Example: 5 or -2">
+            <small>Use a positive number to add stock and a negative number to reduce stock.</small>
+          </label>
+          <label>
+            Reason *
+            <select name="reason" required>
+              <option value="">Choose a reason</option>
+              <option value="Physical count correction">Physical count correction</option>
+              <option value="Damaged item">Damaged item</option>
+              <option value="Lost/missing item">Lost/missing item</option>
+              <option value="Found stock">Found stock</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label class="wide">
+            Notes
+            <input type="text" name="notes" placeholder="Optional notes">
+          </label>
+        </div>
+        <button type="submit" class="primary full" id="saveAdjustmentBtn">Save adjustment</button>
       </form>
     `;
 
@@ -539,7 +531,9 @@ function dateForInput(value) {
 
 function openAdjustmentForm() {
   resetAdjustmentForm();
-  $("#stockAdjustmentModal").showModal();
+  const dialog = $("#stockAdjustmentModal");
+
+  if (!dialog.open) dialog.showModal();
 }
 
 async function editStockAdjustment(reference) {
@@ -805,10 +799,6 @@ document.addEventListener("click", e => {
 
   if (u) updateSale(u.dataset.order);
 
-  if (e.target.closest("#addStockAdjustmentBtn")) {
-    openAdjustmentForm();
-  }
-
   const editAdjustment = e.target.closest(".edit-stock-adjustment");
 
   if (editAdjustment) {
@@ -889,6 +879,8 @@ $("#miscForm").onsubmit = e => {
 
 // Create the Stock Adjustments navigation, page and modal first.
 setupStockAdjustmentsUI();
+
+$("#addStockAdjustmentBtn").addEventListener("click", openAdjustmentForm);
 
 // Now attach the form listener.
 $("#stockAdjustmentForm").addEventListener(
