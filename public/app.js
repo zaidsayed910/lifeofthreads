@@ -887,6 +887,10 @@ $("#miscForm").onsubmit = e => {
 
 /* ========== STOCK ADJUSTMENT FORM ========== */
 
+// Create the Stock Adjustments navigation, page and modal first.
+setupStockAdjustmentsUI();
+
+// Now attach the form listener.
 $("#stockAdjustmentForm").addEventListener(
   "submit",
   saveStockAdjustment
@@ -1028,8 +1032,6 @@ document.addEventListener("click", e => {
 });
 
 /* ========== INITIALIZE ========== */
-
-setupStockAdjustmentsUI();
 
 if (token) {
   showApp();
